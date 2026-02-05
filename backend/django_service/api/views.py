@@ -5,14 +5,91 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.conf import settings
-from .models import Farmer, ProduceRecord, QualityMetrics, Transaction
+from .models import Farmer, ProduceRecord, QualityMetrics, Transaction, LabReport
 from .serializers import (
     FarmerSerializer, 
     ProduceRecordSerializer, 
     QualityMetricsSerializer, 
-    TransactionSerializer
+    TransactionSerializer,
+    LabReportSerializer
 )
 from blockchain.contract_interaction import ContractInteraction
+
+class LabReportViewSet(viewsets.ModelViewSet):
+    """ViewSet for lab report upload and analysis"""
+    queryset = LabReport.objects.all()
+    serializer_class = LabReportSerializer
+    
+    @action(detail=False, methods=['post'])
+    def analyze(self, request):
+        """
+        Upload and analyze lab report image
+        Returns: Extracted parameters and grade
+        """
+        if 'report_image' not in request.FILES:
+            return Response(
+                {"error": "No report_image file provided"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        report_image = request.FILES['report_image']
+        
+        # Call FastAPI service for Gemini analysis
+        try:
+            url = f"{settings.FASTAPI_SERVICE_URL}/api/lab-report/analyze"
+            files = {'file': report_image}
+            response = requests.post(url, files=files, timeout=30)
+            
+            if response.status_code != 200:
+                return Response(
+                    {"error": "Analysis service failed", "details": response.text},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            analysis_result = response.json()
+            
+            # Save to database
+            lab_report = LabReport.objects.create(
+                report_image=report_image,
+                sample_id=analysis_result['parameters'].get('sample_id'),
+                lab_name=analysis_result['parameters'].get('lab_name'),
+                report_date=analysis_result['parameters'].get('report_date'),
+                ph_value=analysis_result['parameters'].get('pH'),
+                ph_status=analysis_result['parameters'].get('pH_status'),
+                nitrogen_value=analysis_result['parameters'].get('nitrogen'),
+                nitrogen_status=analysis_result['parameters'].get('nitrogen_status'),
+                phosphorus_value=analysis_result['parameters'].get('phosphorus'),
+                phosphorus_status=analysis_result['parameters'].get('phosphorus_status'),
+                potassium_value=analysis_result['parameters'].get('potassium'),
+                potassium_status=analysis_result['parameters'].get('potassium_status'),
+                organic_carbon_value=analysis_result['parameters'].get('organic_carbon'),
+                organic_carbon_status=analysis_result['parameters'].get('organic_carbon_status'),
+                grade=analysis_result['grade'],
+                grade_description=analysis_result['grade_description'],
+                out_of_range_count=analysis_result['out_of_range_count'],
+                issues=analysis_result['issues']
+            )
+            
+            serializer = self.get_serializer(lab_report)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except requests.exceptions.RequestException as e:
+            return Response(
+                {"error": "Failed to connect to analysis service", "details": str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        except Exception as e:
+            return Response(
+                {"error": "Unexpected error during analysis", "details": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'])
+    def passport(self, request, pk=None):
+        """Generate digital passport view for a lab report"""
+        lab_report = self.get_object()
+        serializer = self.get_serializer(lab_report)
+        return Response(serializer.data)
 
 class FarmerViewSet(viewsets.ModelViewSet):
     queryset = Farmer.objects.all()

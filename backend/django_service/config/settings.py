@@ -1,12 +1,20 @@
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = 'django-insecure-k3m_&v-2-k-t2p*v=v*k!o#k-t2p*v=v*k!o#'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-k3m_&v-2-k-t2p*v=v*k!o#k-t2p*v=v*k!o#')
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+
+# External Service URLs
+FASTAPI_SERVICE_URL = os.getenv('FASTAPI_SERVICE_URL', 'http://localhost:8001')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -54,16 +62,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'cybernova',
-        'USER': 'postgres',
-        'PASSWORD': '3857Athu', # I will use the one I saw or let the user fix it if I'm not sure
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.getenv('DATABASE_NAME', 'cybernova'),
+        'USER': os.getenv('DATABASE_USER', 'postgres'),
+        'PASSWORD': os.getenv('DATABASE_PASSWORD', '3857Athu'),
+        'HOST': os.getenv('DATABASE_HOST', 'localhost'),
+        'PORT': os.getenv('DATABASE_PORT', '5432'),
     }
 }
-
-# The user had '3857Athu' in the diff snippet 143
-# Let me use that.
 
 AUTH_PASSWORD_VALIDATORS = [
     {

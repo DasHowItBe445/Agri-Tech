@@ -1,20 +1,13 @@
-[23:27, 2/5/2026] Sanjana Das: /** @type {import('postcss-load-config').Config} */
-const config = {
-  plugins: {
-    tailwindcss: {},
-  },
-}
-
-export default config
-[23:28, 2/5/2026] Sanjana Das: import type { Config } from 'tailwindcss'
+import type { Config } from 'tailwindcss'
+import tailwindcssAnimate from 'tailwindcss-animate'
 
 const config: Config = {
   darkMode: ['class'],
   content: [
-    './pages/*/.{js,ts,jsx,tsx,mdx}',
-    './components/*/.{js,ts,jsx,tsx,mdx}',
-    './app/*/.{js,ts,jsx,tsx,mdx}',
-    '*.{js,ts,jsx,tsx,mdx}',
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+    './*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
@@ -103,6 +96,6 @@ const config: Config = {
       },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [tailwindcssAnimate],
 }
 export default config

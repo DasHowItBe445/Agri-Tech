@@ -111,15 +111,22 @@ export function UploadForm() {
   }, [])
 
   const handleFile = (file: File, type: "product" | "kisanPehchaan" | "labReport") => {
-    if (file.type.startsWith("image/")) {
+    if (type === "labReport") {
+      // Accept both images and PDFs for lab reports
+      if (file.type.startsWith("image/") || file.type === "application/pdf") {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          setLabReportImage(e.target?.result as string)
+        }
+        reader.readAsDataURL(file)
+      }
+    } else if (file.type.startsWith("image/")) {
       const reader = new FileReader()
       reader.onload = (e) => {
         if (type === "product") {
           setSelectedImage(e.target?.result as string)
         } else if (type === "kisanPehchaan") {
           setKisanPehchaanImage(e.target?.result as string)
-        } else {
-          setLabReportImage(e.target?.result as string)
         }
       }
       reader.readAsDataURL(file)
@@ -512,7 +519,7 @@ export function UploadForm() {
                 >
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,application/pdf,.pdf"
                     onChange={handleFileInputLabReport}
                     className="hidden"
                     id="lab-report-upload"
@@ -522,10 +529,10 @@ export function UploadForm() {
                       <FileText className="w-5 h-5 text-accent-foreground" />
                     </div>
                     <p className="font-medium text-card-foreground text-sm mb-1">
-                      Drop report here
+                      Drop PDF/image here
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      or click to browse
+                      PDF or image files accepted
                     </p>
                   </label>
                 </div>

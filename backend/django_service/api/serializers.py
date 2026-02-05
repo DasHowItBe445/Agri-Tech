@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import Farmer, ProduceRecord, QualityMetrics, Transaction
+from .models import Farmer, ProduceRecord, QualityMetrics, Transaction, LabReport
+
+class LabReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LabReport
+        fields = '__all__'
+        read_only_fields = ['created_at', 'updated_at']
 
 class QualityMetricsSerializer(serializers.ModelSerializer):
     class Meta:
