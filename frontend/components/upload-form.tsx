@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Upload, Camera, X, Loader2, CheckCircle2, FileText } from "lucide-react"
+import { ethers } from "ethers"
+import { CONTRACT_ABI, CONTRACT_ADDRESS } from "@/lib/contract"
+
 
 const cropTypes = [
   "Tomatoes",
@@ -182,10 +185,64 @@ export function UploadForm() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedImage || !kisanPehchaanImage || !cropType || !harvestDate || !quantity) return
-    await simulateAnalysis()
+  e.preventDefault()
+
+  if (!selectedImage || !kisanPehchaanImage || !cropType || !harvestDate || !quantity) {
+    alert("Please fill all required fields")
+    return
   }
+
+  try {
+    // 1️⃣ Check MetaMask
+    if (!window.ethereum) {
+      alert("Please install MetaMask")
+      return
+    }
+
+    // 2️⃣ Connect wallet
+    const provider = new ethers.BrowserProvider(window.ethereum)
+    await provider.send("eth_requestAccounts", [])
+    const signer = await provider.getSigner()
+
+    // 3️⃣ Get user address
+    const address = await signer.getAddress()
+    console.log("Connected:", address)
+
+    // 4️⃣ Run analysis (existing UI logic)
+    await simulateAnalysis()
+
+    // 5️⃣ Connect contract
+    const contract = new ethers.Contract(
+      CONTRACT_ADDRESS,
+      CONTRACT_ABI,
+      signer
+    )
+
+    // 6️⃣ Call smart contract
+    const tx = await contract.createPassport(
+      cropType,
+      Number(quantity),
+      Math.floor(new Date(harvestDate).getTime() / 1000),
+
+      result?.grade || "A",
+      result?.qualityScore || 80,
+      "Medium",
+      "None",
+
+      "CERT_HASH_DEMO",
+      "IMG_HASH_DEMO"
+    )
+
+    await tx.wait()
+
+    console.log("Passport minted:", tx.hash)
+
+  } catch (err: any) {
+    console.error(err)
+    alert("Transaction failed")
+  }
+}
+
 
   const handleViewPassport = () => {
     const passportData = {
