@@ -56,7 +56,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'cybernova',
         'USER': 'postgres',
-        'PASSWORD': 'password', # I will use the one I saw or let the user fix it if I'm not sure
+        'PASSWORD': '3857Athu', # I will use the one I saw or let the user fix it if I'm not sure
         'HOST': 'localhost',
         'PORT': '5432',
     }

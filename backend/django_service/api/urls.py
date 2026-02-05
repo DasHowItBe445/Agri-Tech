@@ -13,6 +13,7 @@ urlpatterns = [
 
     # Produce Endpoints (Matching Image)
     path('produce/create', ProduceRecordViewSet.as_view({'post': 'create_record'})),
+    path('produce/full-pipeline', ProduceRecordViewSet.as_view({'post': 'full_pipeline'})),
     path('produce/<int:pk>', ProduceRecordViewSet.as_view({'get': 'retrieve'})),
     path('produce/farmer/<int:farmer_id>', ProduceRecordViewSet.as_view({'get': 'get_farmer_produce'})),
     path('produce/<int:pk>/verify', ProduceRecordViewSet.as_view({'post': 'verify'})),
