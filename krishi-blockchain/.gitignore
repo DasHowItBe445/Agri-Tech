@@ -1,0 +1,10 @@
+# Node
+node_modules/
+
+# Hardhat
+krishi-blockchain/artifacts/
+krishi-blockchain/cache/
+krishi-blockchain/node_modules/
+
+# Env
+.env
