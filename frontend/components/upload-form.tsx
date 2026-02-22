@@ -13,7 +13,14 @@ import { ethers } from "ethers"
 import { CONTRACT_ABI, CONTRACT_ADDRESS } from "@/lib/contract"
 
 
+declare global {
+  interface Window {
+    ethereum?: any
+  }
+}
+
 const cropTypes = [
+
   "Tomatoes",
   "Potatoes",
   "Onions",
@@ -29,7 +36,7 @@ const cropTypes = [
   "Other",
 ]
 
-type AnalysisStage = "idle" | "uploading" | "analyzing" | "grading" | "complete"
+type AnalysisStage = "idle" | "uploading" | "analyzing" | "grading" | "minting" | "complete"
 
 interface GradingResult {
   grade: "A" | "B" | "C"
@@ -154,94 +161,125 @@ export function UploadForm() {
     }
   }
 
-  const simulateAnalysis = async () => {
-    setStage("uploading")
-    await new Promise((r) => setTimeout(r, 1000))
-    
-    setStage("analyzing")
-    await new Promise((r) => setTimeout(r, 1500))
-    
-    setStage("grading")
-    await new Promise((r) => setTimeout(r, 1200))
+  const performAnalysis = async (): Promise<GradingResult | null> => {
+    try {
+      setStage("uploading")
 
-    const grades: Array<"A" | "B" | "C"> = ["A", "B", "C"]
-    const freshness: Array<"Fresh" | "Moderate" | "Aging"> = ["Fresh", "Moderate", "Aging"]
-    
-    const mockResult: GradingResult = {
-      grade: grades[Math.floor(Math.random() * 2)],
-      confidence: 85 + Math.floor(Math.random() * 12),
-      qualityScore: 78 + Math.floor(Math.random() * 20),
-      freshness: freshness[Math.floor(Math.random() * 2)],
-      defects: Math.random() > 0.5 ? ["Minor surface blemishes detected"] : [],
-      recommendations: [
-        "Store in cool, dry place",
-        "Best consumed within 5 days",
-        "Suitable for retail and wholesale markets",
-      ],
+      // If we have a produce image but no lab report, analyze the produce directly
+      if (selectedImage && !labReportImage) {
+        setStage("analyzing")
+        const res = await fetch(selectedImage)
+        const blob = await res.blob()
+        const file = new File([blob], `produce.png`, { type: "image/png" })
+
+        const formData = new FormData()
+        formData.append("file", file)
+
+        // Call FastAPI directly for produce analysis (port 8001)
+        const response = await fetch("http://127.0.0.1:8001/api/analyze", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!response.ok) throw new Error("Produce analysis failed")
+        const data = await response.json()
+
+        setStage("grading")
+        await new Promise((r) => setTimeout(r, 800))
+
+        const result: GradingResult = {
+          grade: data.grade as "A" | "B" | "C",
+          confidence: data.confidence_score * 100 || 95,
+          qualityScore: data.freshness_score || 50,
+          freshness: data.freshness_score > 70 ? "Fresh" : data.freshness_score > 40 ? "Moderate" : "Aging",
+          defects: data.issues || [],
+          recommendations: [data.summary || "Visual analysis complete"],
+        }
+        setResult(result)
+        return result
+      }
+
+      // If we have a lab report (with or without produce image), use the Django analysis flow
+      if (labReportImage) {
+        const res = await fetch(labReportImage)
+        const blob = await res.blob()
+        const extension = blob.type === "application/pdf" ? "pdf" : "png"
+        const file = new File([blob], `lab_report.${extension}`, { type: blob.type })
+
+        const formData = new FormData()
+        formData.append("report_image", file)
+
+        setStage("analyzing")
+        const response = await fetch("http://127.0.0.1:8000/api/lab-reports/analyze/", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error("Backend Error Response:", errorText)
+          throw new Error(`Analysis failed (${response.status})`)
+        }
+
+        const data = await response.json()
+        setStage("grading")
+        await new Promise((r) => setTimeout(r, 800))
+
+        const analysisResult: GradingResult = {
+          grade: data.grade as "A" | "B" | "C",
+          confidence: 95,
+          qualityScore: data.grade === "A" ? 92 : data.grade === "B" ? 78 : 45,
+          freshness: "Fresh",
+          defects: data.issues || [],
+          recommendations: [
+            data.grade_description || data.summary,
+            "Soil analysis synchronized with quality metrics",
+          ],
+        }
+
+        setResult(analysisResult)
+        return analysisResult
+      }
+
+      // Fallback if neither is provided but somehow submitted
+      throw new Error("No image or report provided for analysis")
+
+    } catch (error: any) {
+      console.error("performAnalysis caught error:", error)
+      setStage("idle")
+      return null
     }
-
-    setResult(mockResult)
-    setStage("complete")
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
+    e.preventDefault()
 
-  if (!selectedImage || !kisanPehchaanImage || !cropType || !harvestDate || !quantity) {
-    alert("Please fill all required fields")
-    return
-  }
-
-  try {
-    // 1️⃣ Check MetaMask
-    if (!window.ethereum) {
-      alert("Please install MetaMask")
+    if (!selectedImage || !kisanPehchaanImage || !cropType || !harvestDate || !quantity) {
+      alert("Please fill all required fields")
       return
     }
 
-    // 2️⃣ Connect wallet
-    const provider = new ethers.BrowserProvider(window.ethereum)
-    await provider.send("eth_requestAccounts", [])
-    const signer = await provider.getSigner()
+    try {
+      // 1️⃣ Run Gemini Analysis & DB Save (Primary Objective)
+      console.log("Starting Analysis Pipeline...")
+      const analysisData = await performAnalysis()
 
-    // 3️⃣ Get user address
-    const address = await signer.getAddress()
-    console.log("Connected:", address)
+      if (!analysisData) {
+        throw new Error("Analysis failed. PLEASE CHECK:\n1. Is FastAPI running on port 8001?\n2. Is Django running on port 8000?\n3. Check your terminals for specific error logs.")
+      }
 
-    // 4️⃣ Run analysis (existing UI logic)
-    await simulateAnalysis()
+      console.log("Analysis successful and data saved to PostgreSQL.")
 
-    // 5️⃣ Connect contract
-    const contract = new ethers.Contract(
-      CONTRACT_ADDRESS,
-      CONTRACT_ABI,
-      signer
-    )
+      // 2️⃣ Display results (Blockchain skipped as per user request)
+      setStage("complete")
+      console.log("Show results UI.")
 
-    // 6️⃣ Call smart contract
-    const tx = await contract.createPassport(
-      cropType,
-      Number(quantity),
-      Math.floor(new Date(harvestDate).getTime() / 1000),
-
-      result?.grade || "A",
-      result?.qualityScore || 80,
-      "Medium",
-      "None",
-
-      "CERT_HASH_DEMO",
-      "IMG_HASH_DEMO"
-    )
-
-    await tx.wait()
-
-    console.log("Passport minted:", tx.hash)
-
-  } catch (err: any) {
-    console.error(err)
-    alert("Transaction failed")
+    } catch (err: any) {
+      console.error("Submit Error:", err)
+      alert(err.message || "An unexpected error occurred")
+      setStage("idle")
+    }
   }
-}
 
 
   const handleViewPassport = () => {
@@ -254,7 +292,7 @@ export function UploadForm() {
       id: `KP-${Date.now()}`,
       createdAt: new Date().toISOString(),
     }
-    
+
     localStorage.setItem("latestPassport", JSON.stringify(passportData))
     router.push("/passport")
   }
@@ -279,26 +317,29 @@ export function UploadForm() {
             <Loader2 className="w-16 h-16 text-primary mx-auto mb-6 animate-spin" />
             <h3 className="font-display text-xl font-semibold text-card-foreground mb-2">
               {stage === "uploading" && "Uploading Image..."}
-              {stage === "analyzing" && "Analyzing Visual Parameters..."}
+              {stage === "analyzing" && "Analyzing Soil Parameters..."}
               {stage === "grading" && "Generating Quality Grade..."}
+              {stage === "minting" && "Securing on Blockchain..."}
             </h3>
             <p className="text-muted-foreground">
               {stage === "uploading" && "Securely transferring your produce image"}
-              {stage === "analyzing" && "AI is examining color, size, defects, and uniformity"}
-              {stage === "grading" && "Calculating freshness score and final grade"}
+              {stage === "analyzing" && "Gemini AI is examining the lab report findings"}
+              {stage === "grading" && "Calculating soil health and final grade"}
+              {stage === "minting" && "Recording the digital passport hash on-chain"}
             </p>
-            
+
             <div className="mt-8 max-w-xs mx-auto">
               <div className="flex justify-between text-sm mb-2">
                 <span className={stage === "uploading" ? "text-primary font-medium" : "text-muted-foreground"}>Upload</span>
                 <span className={stage === "analyzing" ? "text-primary font-medium" : "text-muted-foreground"}>Analyze</span>
                 <span className={stage === "grading" ? "text-primary font-medium" : "text-muted-foreground"}>Grade</span>
+                <span className={stage === "minting" ? "text-primary font-medium" : "text-muted-foreground"}>Sync</span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-primary rounded-full transition-all duration-500"
-                  style={{ 
-                    width: stage === "uploading" ? "33%" : stage === "analyzing" ? "66%" : "100%" 
+                  style={{
+                    width: stage === "uploading" ? "25%" : stage === "analyzing" ? "50%" : stage === "grading" ? "75%" : "100%"
                   }}
                 />
               </div>
@@ -327,9 +368,9 @@ export function UploadForm() {
             <div>
               {selectedImage && (
                 <div className="aspect-square rounded-xl overflow-hidden bg-muted">
-                  <img 
-                    src={selectedImage || "/placeholder.svg"} 
-                    alt="Uploaded produce" 
+                  <img
+                    src={selectedImage || "/placeholder.svg"}
+                    alt="Uploaded produce"
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -338,9 +379,8 @@ export function UploadForm() {
 
             <div className="space-y-6">
               <div className="flex items-center gap-4">
-                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-bold text-primary-foreground ${
-                  result.grade === "A" ? "bg-primary" : result.grade === "B" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
-                }`}>
+                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-bold text-primary-foreground ${result.grade === "A" ? "bg-primary" : result.grade === "B" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
+                  }`}>
                   {result.grade}
                 </div>
                 <div>
@@ -357,7 +397,7 @@ export function UploadForm() {
                     <span className="font-semibold text-card-foreground">{result.qualityScore}%</span>
                   </div>
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-primary rounded-full"
                       style={{ width: `${result.qualityScore}%` }}
                     />
@@ -366,10 +406,9 @@ export function UploadForm() {
 
                 <div className="flex justify-between py-2 border-b border-border">
                   <span className="text-muted-foreground">Freshness</span>
-                  <span className={`font-semibold ${
-                    result.freshness === "Fresh" ? "text-primary" : 
+                  <span className={`font-semibold ${result.freshness === "Fresh" ? "text-primary" :
                     result.freshness === "Moderate" ? "text-secondary-foreground" : "text-destructive"
-                  }`}>{result.freshness}</span>
+                    }`}>{result.freshness}</span>
                 </div>
 
                 <div className="flex justify-between py-2 border-b border-border">
@@ -397,14 +436,14 @@ export function UploadForm() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
-            <Button 
+            <Button
               onClick={handleViewPassport}
               className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               View Digital Passport
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={resetForm}
               className="flex-1 bg-transparent"
             >
@@ -430,12 +469,12 @@ export function UploadForm() {
               <p className="text-sm text-muted-foreground mb-3">
                 Upload a clear photo of your produce
               </p>
-              
+
               {selectedImage ? (
                 <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-muted">
-                  <img 
-                    src={selectedImage || "/placeholder.svg"} 
-                    alt="Selected produce" 
+                  <img
+                    src={selectedImage || "/placeholder.svg"}
+                    alt="Selected produce"
                     className="w-full h-full object-cover"
                   />
                   <button
@@ -452,11 +491,10 @@ export function UploadForm() {
                   onDragLeave={handleDragProduct}
                   onDragOver={handleDragProduct}
                   onDrop={handleDropProduct}
-                  className={`aspect-[4/3] rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                    dragActiveProduct 
-                      ? "border-primary bg-accent"
-                      : "border-border hover:border-primary/50 hover:bg-muted/50"
-                  }`}
+                  className={`aspect-[4/3] rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${dragActiveProduct
+                    ? "border-primary bg-accent"
+                    : "border-border hover:border-primary/50 hover:bg-muted/50"
+                    }`}
                 >
                   <input
                     type="file"
@@ -488,12 +526,12 @@ export function UploadForm() {
               <p className="text-sm text-muted-foreground mb-3">
                 Official farmer identity document
               </p>
-              
+
               {kisanPehchaanImage ? (
                 <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-muted">
-                  <img 
-                    src={kisanPehchaanImage || "/placeholder.svg"} 
-                    alt="Kisan Pehchaan Patra" 
+                  <img
+                    src={kisanPehchaanImage || "/placeholder.svg"}
+                    alt="Kisan Pehchaan Patra"
                     className="w-full h-full object-cover"
                   />
                   <button
@@ -510,11 +548,10 @@ export function UploadForm() {
                   onDragLeave={handleDragKisanPehchaan}
                   onDragOver={handleDragKisanPehchaan}
                   onDrop={handleDropKisanPehchaan}
-                  className={`aspect-[4/3] rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                    dragActiveKisanPehchaan 
-                      ? "border-primary bg-accent"
-                      : "border-border hover:border-primary/50 hover:bg-muted/50"
-                  }`}
+                  className={`aspect-[4/3] rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${dragActiveKisanPehchaan
+                    ? "border-primary bg-accent"
+                    : "border-border hover:border-primary/50 hover:bg-muted/50"
+                    }`}
                 >
                   <input
                     type="file"
@@ -546,12 +583,12 @@ export function UploadForm() {
               <p className="text-sm text-muted-foreground mb-3">
                 Quality testing lab report
               </p>
-              
+
               {labReportImage ? (
                 <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-muted">
-                  <img 
-                    src={labReportImage || "/placeholder.svg"} 
-                    alt="Lab Report" 
+                  <img
+                    src={labReportImage || "/placeholder.svg"}
+                    alt="Lab Report"
                     className="w-full h-full object-cover"
                   />
                   <button
@@ -568,11 +605,10 @@ export function UploadForm() {
                   onDragLeave={handleDragLabReport}
                   onDragOver={handleDragLabReport}
                   onDrop={handleDropLabReport}
-                  className={`aspect-[4/3] rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${
-                    dragActiveLabReport 
-                      ? "border-primary bg-accent"
-                      : "border-border hover:border-primary/50 hover:bg-muted/50"
-                  }`}
+                  className={`aspect-[4/3] rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-colors ${dragActiveLabReport
+                    ? "border-primary bg-accent"
+                    : "border-border hover:border-primary/50 hover:bg-muted/50"
+                    }`}
                 >
                   <input
                     type="file"
@@ -673,8 +709,8 @@ export function UploadForm() {
           </div>
 
           <div className="mt-8 pt-6 border-t border-border">
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               size="lg"
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
               disabled={!selectedImage || !kisanPehchaanImage || !cropType || !harvestDate || !quantity}

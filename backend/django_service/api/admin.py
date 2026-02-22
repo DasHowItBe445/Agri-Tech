@@ -1,5 +1,11 @@
 from django.contrib import admin
-from .models import Farmer, ProduceRecord, QualityMetrics, Transaction
+from .models import Farmer, ProduceRecord, QualityMetrics, Transaction, LabReport
+
+@admin.register(LabReport)
+class LabReportAdmin(admin.ModelAdmin):
+    list_display = ('sample_id', 'lab_name', 'grade', 'report_date', 'created_at')
+    search_fields = ('sample_id', 'lab_name')
+
 
 @admin.register(Farmer)
 class FarmerAdmin(admin.ModelAdmin):
@@ -7,7 +13,8 @@ class FarmerAdmin(admin.ModelAdmin):
 
 @admin.register(QualityMetrics)
 class QualityMetricsAdmin(admin.ModelAdmin):
-    list_display = ('grade', 'confidence_score', 'freshness_score', 'captured_at')
+    list_display = ('grade', 'lab_report_grade', 'confidence_score', 'freshness_score', 'captured_at')
+    search_fields = ('grade', 'lab_report_grade')
 
 @admin.register(ProduceRecord)
 class ProduceRecordAdmin(admin.ModelAdmin):

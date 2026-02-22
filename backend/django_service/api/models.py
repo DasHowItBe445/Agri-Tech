@@ -3,7 +3,7 @@ from django.db import models
 class LabReport(models.Model):
     """Stores soil lab report analysis results"""
     # Report metadata
-    report_image = models.ImageField(upload_to='lab_reports/')
+    report_image = models.FileField(upload_to='lab_reports/')
     sample_id = models.CharField(max_length=100, null=True, blank=True)
     lab_name = models.CharField(max_length=255, null=True, blank=True)
     report_date = models.DateField(null=True, blank=True)
@@ -55,10 +55,15 @@ class Farmer(models.Model):
 
 class QualityMetrics(models.Model):
     grade = models.CharField(max_length=10)
-    confidence_score = models.FloatField()
-    freshness_score = models.FloatField()
+    confidence_score = models.FloatField(default=0.0)
+    freshness_score = models.FloatField(default=0.0)
     color_saturation = models.FloatField(null=True, blank=True)
     surface_defects = models.JSONField(null=True, blank=True)
+    
+    # Lab Report Analysis Fields
+    lab_report_summary = models.TextField(null=True, blank=True)
+    lab_report_grade = models.CharField(max_length=1, null=True, blank=True)
+    
     captured_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

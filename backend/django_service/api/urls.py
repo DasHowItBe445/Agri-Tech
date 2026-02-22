@@ -10,7 +10,7 @@ from .views import (
 urlpatterns = [
     # Lab Report Endpoints
     path('lab-reports/', LabReportViewSet.as_view({'get': 'list', 'post': 'create'})),
-    path('lab-reports/analyze', LabReportViewSet.as_view({'post': 'analyze'})),
+    path('lab-reports/analyze/', LabReportViewSet.as_view({'post': 'analyze'})),
     path('lab-reports/<int:pk>/', LabReportViewSet.as_view({'get': 'retrieve'})),
     path('lab-reports/<int:pk>/passport', LabReportViewSet.as_view({'get': 'passport'})),
 

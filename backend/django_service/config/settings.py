@@ -14,7 +14,7 @@ DEBUG = os.getenv('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
 # External Service URLs
-FASTAPI_SERVICE_URL = os.getenv('FASTAPI_SERVICE_URL', 'http://localhost:8001')
+FASTAPI_SERVICE_URL = os.getenv('FASTAPI_SERVICE_URL', 'http://127.0.0.1:8001')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -100,5 +100,3 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ]
 }
-
-FASTAPI_SERVICE_URL = 'http://localhost:8001'

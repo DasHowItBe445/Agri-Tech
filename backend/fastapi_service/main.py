@@ -1,5 +1,10 @@
+from dotenv import load_dotenv
+# Load environment variables before importing any other local modules
+load_dotenv()
+
 from fastapi import FastAPI
 from routers import analyze, health, lab_report
+import os
 
 app = FastAPI(title="Krishi Pramaan AI Service")
 

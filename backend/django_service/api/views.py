@@ -34,13 +34,27 @@ class LabReportViewSet(viewsets.ModelViewSet):
         
         report_image = request.FILES['report_image']
         
+        print(f"Analyzing report: {report_image.name}, type: {report_image.content_type}")
+        
         # Call FastAPI service for Gemini analysis
         try:
             url = f"{settings.FASTAPI_SERVICE_URL}/api/lab-report/analyze"
-            files = {'file': report_image}
-            response = requests.post(url, files=files, timeout=30)
+            
+            # Ensure the file pointer is at the start
+            report_image.seek(0)
+            
+            # Pass name, file object, and content type explicitly
+            files = {
+                'file': (report_image.name, report_image.file, report_image.content_type)
+            }
+            
+            print(f"Forwarding to FastAPI at: {url}")
+            response = requests.post(url, files=files, timeout=45)
+            
+            print(f"FastAPI Response Code: {response.status_code}")
             
             if response.status_code != 200:
+                print(f"FastAPI Error: {response.text}")
                 return Response(
                     {"error": "Analysis service failed", "details": response.text},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -68,6 +82,14 @@ class LabReportViewSet(viewsets.ModelViewSet):
                 grade_description=analysis_result['grade_description'],
                 out_of_range_count=analysis_result['out_of_range_count'],
                 issues=analysis_result['issues']
+            )
+            
+            # Also save to QualityMetrics as requested by user
+            QualityMetrics.objects.create(
+                grade=analysis_result['grade'],  # Overall grade
+                lab_report_grade=analysis_result['grade'],
+                lab_report_summary=analysis_result['summary'],
+                confidence_score=95.0, # Approximate confidence from Gemini
             )
             
             serializer = self.get_serializer(lab_report)

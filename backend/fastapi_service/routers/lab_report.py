@@ -24,15 +24,20 @@ async def analyze_lab_report(file: UploadFile = File(...)):
     if not any(file.content_type.startswith(t) for t in allowed_types):
         raise HTTPException(status_code=400, detail="File must be an image or PDF")
     
+    # Analyze using Gemini
     try:
+        print(f"Received file: {file.filename}, type: {file.content_type}")
+        
         # Read file bytes
         file_bytes = await file.read()
         
         # Check if it's a PDF
         is_pdf = file.content_type == 'application/pdf'
         
+        print(f"Starting Gemini analysis (PDF: {is_pdf})...")
         # Analyze using Gemini
         result = analyzer.analyze_report(file_bytes, is_pdf)
+        print("Analysis completed successfully")
         
         return JSONResponse(content=result, status_code=200)
         
